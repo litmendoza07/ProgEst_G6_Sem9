@@ -1,55 +1,41 @@
-stack =[]
+from __future__ import annotations
 
-def push(item, capacity):
-    if not is_full(capacity):
-        stack.append(item)
-        return "Elemento apilado..."
-    return "Pila llena..."
+from typing import Any
 
-def isEmpty():
-    return not len(stack)
-
-def is_full(capacity):
-    return len(stack) == capacity
-
-def peek():
-    if not isEmpty():
-        return stack[-1]
-    return "Pila vacía..."
-
-def pop_stack():
-    if not isEmpty():
-        return stack.pop()
-    return "Pila vacía..."
-
-def show():
-    message = ""
-    for item in reversed(stack):
-        message += f" | {item: >6}|\n"
-        message += f"└" + "─"* 8 + "┘\n"
-    return message
+StackItem = dict[str, Any]
 
 
-capacity = int(input("Dime el tamaño de la pila: "))
-while True:
-    item = input("Dime un valor: ")
-    print(push(item, capacity))
-    answer = input("Desea ingresar otro dato [s | n]: ")
-    if answer.lower() == "n":
-        break
+def is_empty(stack: list[StackItem]) -> bool:
+    """Devuelve True si la pila está vacía."""
+    return not stack
 
-print("Mostrar tope")
-print(peek())
-print(peek())
 
-print("Desapilar")
-while True:
-    answer = input("Desea desapilar [s | n]: ")
-    if answer.lower() == "s":
-        print(pop_stack())
-    elif answer.lower() == "n":
-        break
-    else:
-        print("Opción invalida...")
-        
+def is_full(stack: list[StackItem], capacity: int) -> bool:
+    """Devuelve True si la pila ya alcanzó su capacidad máxima."""
+    return len(stack) >= capacity
+
+
+def push(stack: list[StackItem], item: StackItem, capacity: int) -> bool:
+    """Agrega un elemento a la pila si aún hay espacio."""
+    if is_full(stack, capacity):
+        return False
+
+    stack.append(item)
+    return True
+
+
+def peek(stack: list[StackItem]) -> StackItem | None:
+    """Muestra el elemento que está en el tope sin quitarlo."""
+    if is_empty(stack):
+        return None
+
+    return stack[-1]
+
+
+def pop_stack(stack: list[StackItem]) -> StackItem | None:
+    """Quita y devuelve el elemento del tope de la pila."""
+    if is_empty(stack):
+        return None
+
+    return stack.pop()
 

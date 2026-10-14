@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Aplicación sencilla para practicar la estructura de datos pila.">
+    <title>Mi pila y cola de imágenes | Estructuras de datos</title>
+    <link
+      href="{{ url_for('static', filename='bootstrap.min.css') }}"
+      rel="stylesheet"
+    >
+  </head>
+  <body class="bg-light">
+    <header class="bg-primary text-white py-4">
+      <div class="container">
+        <h1 class="h2 mb-1">Mi pila y cola de imágenes</h1>
+        <p class="mb-0">Texto LIFO: último en entrar, primero en salir. Fotos FIFO: primero en entrar, primero en salir.</p>
+      </div>
+    </header>
+
+    <main class="container py-4">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div aria-live="polite" aria-atomic="true">
+            {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+              </div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      <div class="row g-4">
+        <section class="col-12 col-lg-5" aria-labelledby="config-title">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <h2 class="h4 card-title" id="config-title">Configuración</h2>
+              <p class="text-body-secondary">Elige cuántos elementos podrá contener la pila.</p>
+              <form action="{{ url_for('configure') }}" method="post">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <label for="capacity" class="form-label">Capacidad (1–{{ max_capacity }})</label>
+                <div class="input-group">
+                  <input
+                    type="number"
+                    class="form-control"
+                    id="capacity"
+                    name="capacity"
+                    min="1"
+                    max="{{ max_capacity }}"
+                    value="{{ capacity if capacity is not none else 5 }}"
+                    required
+                  >
+                  <button class="btn btn-primary" type="submit">
+                    {{ "Reiniciar pila" if capacity is not none else "Crear pila" }}
+                  </button>
+                </div>
+              </form>
+              {% if capacity is not none %}
+                <p class="small text-body-secondary mt-2 mb-0">
+                  Esta pila es privada de esta sesión del navegador.
+                </p>
+              {% endif %}
+            </div>
+          </div>
+
+          {% if capacity is not none %}
+            <div class="card shadow-sm mt-4">
+              <div class="card-body">
+                <h2 class="h4 card-title">Agregar elemento</h2>
+                <form action="{{ url_for('add_item') }}" method="post">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <label for="item" class="form-label">Valor</label>
+                  <div class="input-group">
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="item"
+                      name="item"
+                      maxlength="{{ max_item_length }}"
+                      placeholder="Ejemplo: Libro"
+                      autocomplete="off"
+                      required
+                    >
+                    <button class="btn btn-success" type="submit" {% if item_count >= capacity %}disabled{% endif %}>
+                      Apilar
+                    </button>
+                  </div>
+                  <div class="form-text">Máximo {{ max_item_length }} caracteres.</div>
+                </form>
+              </div>
+            </div>
+
+            <div class="card shadow-sm mt-4">
+              <div class="card-body">
+                <h2 class="h4 card-title">Agregar foto a la cola</h2>
+                <p class="text-body-secondary">
+                  Las fotos se procesan en orden de llegada: primero en entrar, primero en salir.
+                </p>
+                <p class="small text-body-secondary">
+                  {{ image_count }} de {{ capacity }} fotos en la cola.
+                </p>
+                <div class="ratio ratio-4x3 bg-dark rounded overflow-hidden mb-3">
+                  <video
+                    id="camera-preview"
+                    class="w-100 h-100"
+                    autoplay
+                    playsinline
+                    muted
+                    aria-label="Vista previa de la cámara"
+                    hidden
+                  ></video>
+                  <canvas id="photo-canvas" class="d-none"></canvas>
+                </div>
+                <p id="camera-status" class="small text-body-secondary" role="status" aria-live="polite">
+                  La cámara solo se activa cuando pulsas “Activar cámara”.
+                </p>
+                <div class="d-flex flex-wrap gap-2">
+                  <button class="btn btn-outline-primary" id="start-camera" type="button">
+                    Activar cámara
+                  </button>
+                  <button class="btn btn-secondary" id="capture-photo" type="button" disabled>
+                    Tomar foto
+                  </button>
+                </div>
+                <form
+                  action="{{ url_for('add_photo') }}"
+                  method="post"
+                  class="mt-3"
+                  id="photo-form"
+                  data-queue-has-space="{{ (capacity is not none and image_count < capacity)|tojson }}"
+                >
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <input type="hidden" name="photo_data" id="photo-data">
+                  <button
+                    class="btn btn-success"
+                    id="add-photo"
+                    type="submit"
+                    disabled
+                  >
+                    Agregar foto a la cola
+                  </button>
+                </form>
+              </div>
+            </div>
+          {% endif %}
+        </section>
+
+        <section class="col-12 col-lg-7" aria-labelledby="stack-title">
+          <div class="card shadow-sm">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                  <h2 class="h4 card-title mb-1" id="stack-title">Pila de texto</h2>
+                  {% if capacity is not none %}
+                    <p class="text-body-secondary mb-0">
+                      {{ item_count }} de {{ capacity }} elementos
+                    </p>
+                  {% else %}
+                    <p class="text-body-secondary mb-0">Configura una pila para empezar.</p>
+                  {% endif %}
+                </div>
+                {% if capacity is not none %}
+                  <span class="badge text-bg-primary fs-6">
+                    {{ "Llena" if item_count >= capacity else "Disponible" }}
+                  </span>
+                {% endif %}
+              </div>
+
+              {% if capacity is none %}
+                <div class="alert alert-info mb-0" role="status">
+                  Usa el formulario de configuración para crear tu pila.
+                </div>
+              {% elif stack_reversed %}
+                <ol class="list-group list-group-numbered" aria-label="Elementos de la pila, desde el tope">
+                  {% for item in stack_reversed %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      {% if item.startswith(photo_prefix) %}
+                        <span class="d-flex flex-column gap-2">
+                          <span>Foto capturada</span>
+                          <img
+                            src="{{ url_for('photo', photo_id=item|replace(photo_prefix, '', 1)) }}"
+                            alt="Foto guardada como elemento de la pila"
+                            class="img-thumbnail"
+                            width="320"
+                            loading="lazy"
+                          >
+                        </span>
+                      {% else %}
+                        <span class="text-break">{{ item }}</span>
+                      {% endif %}
+                      {% if loop.first %}
+                        <span class="badge text-bg-success ms-3">Tope</span>
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ol>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <form action="{{ url_for('remove_item') }}" method="post" data-confirm="¿Desapilar el elemento que está en el tope?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-warning" type="submit">Desapilar tope</button>
+                  </form>
+                  <form action="{{ url_for('show_top') }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-primary" type="submit">Consultar tope</button>
+                  </form>
+                  <form action="{{ url_for('clear_stack') }}" method="post" data-confirm="¿Vaciar todos los elementos de la pila?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-danger" type="submit">Vaciar pila</button>
+                  </form>
+                </div>
+              {% else %}
+                <div class="alert alert-secondary mb-0" role="status">
+                  La pila está vacía. Agrega un elemento para verlo aquí.
+                </div>
+                <form action="{{ url_for('show_top') }}" method="post" class="mt-3">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-outline-primary" type="submit">Consultar tope</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+          <p class="small text-body-secondary mt-3">
+            La cima de la pila siempre aparece primero. Al desapilar, se elimina ese elemento.
+          </p>
+
+          <div class="card shadow-sm mt-4">
+            <div class="card-body">
+              <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                <div>
+                  <h2 class="h4 card-title mb-1" id="image-queue-title">Cola de imágenes</h2>
+                  {% if capacity is not none %}
+                    <p class="text-body-secondary mb-0">
+                      {{ image_count }} de {{ capacity }} fotos
+                    </p>
+                  {% else %}
+                    <p class="text-body-secondary mb-0">Configura una pila para empezar.</p>
+                  {% endif %}
+                </div>
+                {% if capacity is not none %}
+                  <span class="badge text-bg-info fs-6">
+                    {{ "Llena" if image_count >= capacity else "Disponible" }}
+                  </span>
+                {% endif %}
+              </div>
+              {% if capacity is none %}
+                <div class="alert alert-info mb-0" role="status">
+                  Configura una pila para usar también la cola de imágenes.
+                </div>
+              {% elif image_queue %}
+                <ol class="list-group list-group-numbered" aria-label="Fotos en orden de llegada">
+                  {% for item in image_queue %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <span class="d-flex flex-column gap-2">
+                        <span>{{ "Frente de la cola" if loop.first else "Foto en espera" }}</span>
+                        <img
+                          src="{{ url_for('photo', photo_id=item|replace(photo_prefix, '', 1)) }}"
+                          alt="{{ 'Foto al frente de la cola' if loop.first else 'Foto en espera en la cola' }}"
+                          class="img-thumbnail"
+                          width="320"
+                          loading="lazy"
+                        >
+                      </span>
+                    </li>
+                  {% endfor %}
+                </ol>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                  <form action="{{ url_for('remove_queued_photo') }}" method="post" data-confirm="¿Retirar la foto que está al frente de la cola?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-warning" type="submit">Retirar foto del frente</button>
+                  </form>
+                  <form action="{{ url_for('show_image_queue_front') }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-primary" type="submit">Consultar frente</button>
+                  </form>
+                  <form action="{{ url_for('clear_image_queue') }}" method="post" data-confirm="¿Vaciar todas las fotos de la cola?">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button class="btn btn-outline-danger" type="submit">Vaciar cola</button>
+                  </form>
+                </div>
+              {% else %}
+                <div class="alert alert-secondary mb-0" role="status">
+                  La cola de imágenes está vacía. Toma una foto para agregarla.
+                </div>
+                <form action="{{ url_for('show_image_queue_front') }}" method="post" class="mt-3">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn btn-outline-primary" type="submit">Consultar frente</button>
+                </form>
+              {% endif %}
+              <p class="small text-body-secondary mt-3 mb-0">
+                El frente muestra la foto más antigua. Al retirar, sale esa foto primero.
+              </p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script src="{{ url_for('static', filename='bootstrap.bundle.min.js') }}"></script>
+    <script>
+      document.querySelectorAll("form[data-confirm]").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          if (!window.confirm(form.dataset.confirm)) {
+            event.preventDefault();
+          }
+        });
+      });
+
+      const cameraPreview = document.getElementById("camera-preview");
+      const cameraStatus = document.getElementById("camera-status");
+      const startCameraButton = document.getElementById("start-camera");
+      const capturePhotoButton = document.getElementById("capture-photo");
+      const addPhotoButton = document.getElementById("add-photo");
+
+      if (cameraPreview && cameraStatus && startCameraButton && capturePhotoButton && addPhotoButton) {
+        let cameraStream;
+        const photoCanvas = document.getElementById("photo-canvas");
+        const photoData = document.getElementById("photo-data");
+        const photoForm = document.getElementById("photo-form");
+        const queueHasSpace = photoForm?.dataset.queueHasSpace === "true";
+
+        startCameraButton.addEventListener("click", async () => {
+          if (!navigator.mediaDevices?.getUserMedia) {
+            cameraStatus.textContent = "Este navegador no permite usar la cámara. Prueba con HTTPS o localhost.";
+            return;
+          }
+
+          startCameraButton.disabled = true;
+          cameraStatus.textContent = "Solicitando permiso para usar la cámara…";
+          try {
+            cameraStream = await navigator.mediaDevices.getUserMedia({
+              audio: false,
+              video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+            });
+            cameraPreview.srcObject = cameraStream;
+            cameraPreview.hidden = false;
+            await cameraPreview.play();
+            capturePhotoButton.disabled = false;
+            cameraStatus.textContent = "Cámara activa. Pulsa “Tomar foto” cuando estés listo.";
+          } catch (error) {
+            cameraStatus.textContent =
+              error.name === "NotAllowedError"
+                ? "No se concedió permiso para usar la cámara. Revisa los permisos del navegador."
+                : "No se pudo iniciar la cámara. Comprueba que esté conectada y vuelve a intentarlo.";
+            startCameraButton.disabled = false;
+          }
+        });
+
+        capturePhotoButton.addEventListener("click", () => {
+          if (!cameraPreview.videoWidth || !cameraPreview.videoHeight) {
+            cameraStatus.textContent = "Espera a que la cámara muestre la vista previa.";
+            return;
+          }
+
+          const scale = Math.min(
+            1,
+            1280 / cameraPreview.videoWidth,
+            1280 / cameraPreview.videoHeight,
+          );
+          photoCanvas.width = Math.round(cameraPreview.videoWidth * scale);
+          photoCanvas.height = Math.round(cameraPreview.videoHeight * scale);
+          photoCanvas.getContext("2d").drawImage(
+            cameraPreview,
+            0,
+            0,
+            photoCanvas.width,
+            photoCanvas.height,
+          );
+          photoData.value = photoCanvas.toDataURL("image/jpeg", 0.82);
+          addPhotoButton.disabled = !queueHasSpace;
+          cameraStatus.textContent = queueHasSpace
+            ? "Foto capturada. Agrégala a la cola o toma otra para reemplazarla."
+            : "Foto capturada, pero la cola está llena. Retira una foto antes de agregar otra.";
+        });
+
+        addPhotoButton.disabled = true;
+        window.addEventListener("pagehide", () => {
+          cameraStream?.getTracks().forEach((track) => track.stop());
+        });
+      }
+    </script>
+  </body>
+</html>
