@@ -247,6 +247,11 @@
       font-weight: 750;
     }
 
+    .badge.completed {
+      color: #13734f;
+      background: #e8f6ef;
+    }
+
     .ticket-detail, .empty-state {
       margin: 0;
       color: var(--muted);
@@ -422,6 +427,14 @@
           <div id="waiting-tickets"><p class="empty-state">La fila está vacía. Puedes solicitar un turno.</p></div>
         </section>
 
+        <section class="ticket-panel" aria-labelledby="served-title">
+          <div class="ticket-heading">
+            <h3 id="served-title">Clientes atendidos</h3>
+            <span class="badge completed">Finalizados</span>
+          </div>
+          <div id="served-tickets"><p class="empty-state">Todavía no se ha finalizado ninguna atención.</p></div>
+        </section>
+
         <div class="staff-tools" aria-label="Controles de atención">
           <button class="button" id="call-next" type="button">Llamar siguiente</button>
           <button class="secondary-button" id="finish-current" type="button">Finalizar</button>
@@ -447,11 +460,12 @@
           return {
             nextNumber: Number.isInteger(saved.nextNumber) && saved.nextNumber > 0 ? saved.nextNumber : 1,
             waiting: Array.isArray(saved.waiting) ? saved.waiting : [],
-            current: saved.current && typeof saved.current === "object" ? saved.current : null
+            current: saved.current && typeof saved.current === "object" ? saved.current : null,
+            served: Array.isArray(saved.served) ? saved.served : []
           };
         } catch (error) {
           console.error("No se pudo cargar la fila guardada.", error);
-          return { nextNumber: 1, waiting: [], current: null };
+          return { nextNumber: 1, waiting: [], current: null, served: [] };
         }
       }
 
@@ -486,6 +500,15 @@
         } else {
           waitingContainer.innerHTML = `<ol class="queue-list">${queueState.waiting.map((ticket) =>
             `<li><div class="queue-ticket-info"><strong>${escapeHtml(ticket.id)}</strong> · ${escapeHtml(ticket.name)}<span>${escapeHtml(ticket.topic)}</span></div><button class="delete-ticket" type="button" data-ticket-id="${escapeHtml(ticket.id)}" aria-label="Eliminar turno ${escapeHtml(ticket.id)}">Eliminar</button></li>`
+          ).join("")}</ol>`;
+        }
+
+        const servedContainer = document.querySelector("#served-tickets");
+        if (queueState.served.length === 0) {
+          servedContainer.innerHTML = '<p class="empty-state">Todavía no se ha finalizado ninguna atención.</p>';
+        } else {
+          servedContainer.innerHTML = `<ol class="queue-list">${[...queueState.served].reverse().map((ticket) =>
+            `<li><div class="queue-ticket-info"><strong>${escapeHtml(ticket.id)}</strong> · ${escapeHtml(ticket.name)}<span>${escapeHtml(ticket.topic)}</span></div><span class="badge completed">Atendido</span></li>`
           ).join("")}</ol>`;
         }
       }
@@ -549,11 +572,12 @@
           queueNotice.textContent = "No hay una atención activa para finalizar.";
           return;
         }
-        const finishedId = queueState.current.id;
+        const finishedTicket = queueState.current;
+        queueState.served.push(finishedTicket);
         queueState.current = null;
         saveQueue();
         render();
-        queueNotice.textContent = `La atención del turno ${finishedId} finalizó.`;
+        queueNotice.textContent = `La atención de ${finishedTicket.name} (turno ${finishedTicket.id}) finalizó y aparece en Clientes atendidos.`;
       });
 
       render();
